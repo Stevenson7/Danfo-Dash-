@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { shareScore } from './game/share';
 import { Game, type GameSnapshot } from './game/Game';
 import type { ObstacleKind } from './game/types';
 
@@ -24,6 +25,19 @@ export default function App() {
   const gameRef = useRef<Game | null>(null);
   const [snap, setSnap] = useState<GameSnapshot>(INITIAL);
   const [error, setError] = useState<string | null>(null);
+  const [shareNote, setShareNote] = useState<string | null>(null);
+
+  // Clear the "Copied!" note whenever a new run starts.
+  useEffect(() => {
+    if (snap.phase !== 'over') setShareNote(null);
+  }, [snap.phase]);
+
+  const onShare = async () => {
+    const result = await shareScore(snap.score, snap.coins, snap.newBest);
+    if (result === 'copied') setShareNote('Copied! Paste it to your friends.');
+    else if (result === 'failed') setShareNote("Couldn't share on this device.");
+    else setShareNote(null);
+  };
 
   useEffect(() => {
     if (!canvasRef.current || !surfaceRef.current) return;
@@ -143,6 +157,14 @@ export default function App() {
             <button className="cta" onClick={() => game()?.start()} autoFocus>
               Run again
             </button>
+            <button className="share-btn" onClick={onShare}>
+              <span aria-hidden="true">📣</span> Share score
+            </button>
+            {shareNote && (
+              <p className="share-note" role="status">
+                {shareNote}
+              </p>
+            )}
             <p className="muted-text small">Tap, swipe up or press Enter to restart</p>
           </div>
         </div>

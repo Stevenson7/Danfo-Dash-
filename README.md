@@ -39,7 +39,9 @@ while sliding to jump straight out of it.
 continuously and obstacle rows get denser. Every row leaves at least one lane
 free of danfos, so the road is always beatable. Jumps keep their height but get
 quicker at high speed. Your personal best is saved on your device
-(`localStorage`). The game auto-pauses when you switch apps.
+(`localStorage`). After a run, **Share score** opens your phone's share sheet
+(WhatsApp, X, etc.) with your score and a link to the game, or copies the
+message to the clipboard on browsers without one. The game auto-pauses when you switch apps.
 
 ## Deploy from your phone (no terminal needed): GitHub Pages
 
@@ -96,7 +98,7 @@ src/
 
 `npm test` runs Vitest unit tests covering lane changes, jump/slide physics,
 fast-fall, collisions for each obstacle type, shields, coins, magnet,
-double naira, scoring, the difficulty ramp, road-generation fairness (every row
+double naira, scoring, score sharing, the difficulty ramp, road-generation fairness (every row
 has a non-danfo lane), determinism, swipe/keyboard mapping and personal-best
 storage. A small autopilot bot also plays a full minute on 10 different road
 seeds to check the road stays beatable.
