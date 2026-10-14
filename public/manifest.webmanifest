@@ -1,0 +1,10 @@
+{
+  "name": "Danfo Dash",
+  "short_name": "Danfo Dash",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#1b1033",
+  "theme_color": "#1b1033",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
