@@ -43,26 +43,24 @@ quicker at high speed. Your personal best is saved on your device
 (WhatsApp, X, etc.) with your score and a link to the game, or copies the
 message to the clipboard on browsers without one. The game auto-pauses when you switch apps.
 
-## Deploy from your phone (no terminal needed): GitHub Pages
+## Play it
 
-1. Merge this work into the `main` branch (open a pull request in the GitHub
-   app or on github.com and tap **Merge**).
-2. On github.com open the repository's **Settings → Pages** and set
-   **Source** to **GitHub Actions**.
-3. Open the **Actions** tab. The *Test, build & deploy* workflow runs on every
-   push to `main` (you can also start it manually with **Run workflow**). It
-   runs the tests, builds the game and publishes it to
-   `https://<your-username>.github.io/<repo-name>/`.
-4. On Android, open that link in Chrome and choose **⋮ → Add to Home screen**
-   for a full-screen, app-like experience.
+Live at **https://danfo-dash-lovat.vercel.app/**. On Android, open it in Chrome
+and choose **⋮ → Add to Home screen** for a full-screen, app-like experience.
 
-The Vite config uses `base: './'`, so the build works from any sub-path.
+## Deployment (no terminal needed)
 
-### Other hosts
+The game is hosted on **Vercel**, which rebuilds and redeploys automatically
+every time `main` changes. To update the live game, merge changes into `main`.
 
-**Netlify / Vercel / Cloudflare Pages**: import the repo from their website,
-set the build command to `npm run build` and the output directory to `dist`.
-No environment variables are needed.
+To set it up on a new Vercel project: import the GitHub repo on vercel.com,
+keep the detected **Vite** preset (build command `npm run build`, output
+directory `dist`) and deploy. No environment variables are needed. The same
+settings work on Netlify or Cloudflare Pages, and `base: './'` in the Vite
+config lets the build run from any sub-path.
+
+**CI**: `.github/workflows/ci.yml` runs the tests and production build on every
+push and pull request, so a red ❌ on a commit means something is broken.
 
 ## Local development (optional)
 
@@ -91,7 +89,7 @@ src/
     Game.ts          Ties it together: loop, input, audio, rendering
     constants.ts     Tuning knobs (speeds, jump, spawn rates…)
     *.test.ts        Vitest unit tests
-.github/workflows/deploy.yml   CI: test → build → deploy to GitHub Pages
+.github/workflows/ci.yml       CI: tests + production build
 ```
 
 ## Tests
