@@ -7,6 +7,8 @@ const CRASH_LINES: Record<ObstacleKind, { title: string; line: string }> = {
   danfo: { title: 'Wahala!', line: 'You jam danfo. Conductor no go happy.' },
   pothole: { title: 'Gbam!', line: 'Pothole don swallow your leg.' },
   barrier: { title: 'Ouch!', line: 'You for duck under that barrier.' },
+  police: { title: 'Halt!', line: 'Oga police don stop you. Where your particulars?' },
+  agbero: { title: 'Owo da?!', line: 'Agbero don collect your money. Jump next time!' },
 };
 
 const INITIAL: GameSnapshot = {
@@ -97,11 +99,15 @@ export default function App() {
             </div>
             <div className="how-row">
               <span className="key">⇡</span>
-              <span>Swipe up to jump potholes</span>
+              <span>Swipe up to jump potholes &amp; agbero</span>
             </div>
             <div className="how-row">
               <span className="key">⇣</span>
               <span>Swipe down to duck under barriers</span>
+            </div>
+            <div className="how-row">
+              <span className="key">!</span>
+              <span>Police step sideways. Watch their arrow!</span>
             </div>
             <div className="how-row muted-text">
               <span className="key small">⌨</span>

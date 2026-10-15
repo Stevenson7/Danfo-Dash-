@@ -67,6 +67,15 @@ export class Sfx {
   shieldBreak(): void {
     this.tone(700, 0.25, 'sawtooth', 0.06, 150);
   }
+  whistle(): void {
+    // Police whistle trill.
+    for (let i = 0; i < 4; i++) this.tone(i % 2 ? 2350 : 2600, 0.06, 'sine', 0.05, undefined, i * 0.06);
+  }
+  agbero(): void {
+    // Gruff "oya!" shout.
+    this.tone(180, 0.12, 'sawtooth', 0.07, 240);
+    this.tone(240, 0.16, 'sawtooth', 0.06, 150, 0.12);
+  }
   milestone(): void {
     this.tone(784, 0.1, 'triangle', 0.07);
     this.tone(1175, 0.18, 'triangle', 0.07, undefined, 0.1);

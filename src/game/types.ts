@@ -1,7 +1,7 @@
 import type { Rng } from './rng';
 
 export type Lane = -1 | 0 | 1;
-export type ObstacleKind = 'danfo' | 'pothole' | 'barrier';
+export type ObstacleKind = 'danfo' | 'pothole' | 'barrier' | 'police' | 'agbero';
 export type PowerKind = 'magnet' | 'shield' | 'double';
 export type Phase = 'ready' | 'playing' | 'paused' | 'over';
 export type Action = 'left' | 'right' | 'jump' | 'slide';
@@ -9,7 +9,13 @@ export type Action = 'left' | 'right' | 'jump' | 'slide';
 export interface Obstacle {
   id: number;
   kind: ObstacleKind;
-  lane: Lane;
+  lane: Lane; // lane it spawned in
+  /** Current lane position (police slide sideways between lanes). */
+  x: number;
+  /** Police only: the lane they will step into as you approach. */
+  targetLane: Lane | null;
+  /** Police has started stepping / agbero has started charging. */
+  triggered: boolean;
   z: number;
   depth: number;
   /** Cosmetic variant (livery colour, sign text, …). */
@@ -61,6 +67,8 @@ export type GameEvent =
   | { type: 'lane' }
   | { type: 'bump' }
   | { type: 'shieldBreak' }
+  | { type: 'whistle' }
+  | { type: 'agbero' }
   | { type: 'crash'; kind: ObstacleKind }
   | { type: 'milestone'; score: number };
 

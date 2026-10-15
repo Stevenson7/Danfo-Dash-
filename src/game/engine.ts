@@ -1,4 +1,7 @@
 import {
+  AGBERO_CHARGE,
+  AGBERO_CLEAR_HEIGHT,
+  AGBERO_TRIGGER_TIME,
   BASE_SPEED,
   COIN_SCORE,
   COIN_SPACING,
@@ -17,6 +20,8 @@ import {
   MIN_LANE,
   OBSTACLE_DEPTH,
   PLAYER_HALF_DEPTH,
+  POLICE_STEP_RATE,
+  POLICE_TRIGGER_TIME,
   POTHOLE_CLEAR_HEIGHT,
   POWERUP_INTERVAL_MAX,
   POWERUP_INTERVAL_MIN,
@@ -25,6 +30,7 @@ import {
   SHIELD_GRACE,
   SLIDE_DURATION,
   SPAWN_Z,
+  SPECIALS_AFTER_ROWS,
   SPEED_RAMP,
 } from './constants';
 import { createRng, pick, shuffle } from './rng';
@@ -199,7 +205,7 @@ function tick(state: GameState, dt: number): void {
   updatePlayer(state, dt);
   updateEffects(state, dt);
 
-  for (const o of state.obstacles) o.z -= travel;
+  updateObstacles(state, dt, travel);
   for (const c of state.coinItems) c.z -= travel;
   for (const u of state.powerups) u.z -= travel;
   state.rowFrontier -= travel;
@@ -254,6 +260,30 @@ function updateEffects(state: GameState, dt: number): void {
   if (e.double > 0) e.double = Math.max(0, e.double - dt);
 }
 
+/** Moves obstacles toward the player and runs police / agbero behaviour. */
+function updateObstacles(state: GameState, dt: number, travel: number): void {
+  for (const o of state.obstacles) {
+    o.z -= travel;
+    if (o.kind === 'agbero') {
+      if (!o.triggered && o.z < state.speed * AGBERO_TRIGGER_TIME) {
+        o.triggered = true;
+        state.events.push({ type: 'agbero' });
+      }
+      if (o.triggered) o.z -= state.speed * AGBERO_CHARGE * dt;
+    } else if (o.kind === 'police' && o.targetLane !== null) {
+      if (!o.triggered && o.z < state.speed * POLICE_TRIGGER_TIME) {
+        o.triggered = true;
+        state.events.push({ type: 'whistle' });
+      }
+      if (o.triggered) {
+        const dx = o.targetLane - o.x;
+        const step = POLICE_STEP_RATE * dt;
+        o.x = Math.abs(dx) <= step ? o.targetLane : o.x + Math.sign(dx) * step;
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Road generation
 // ---------------------------------------------------------------------------
@@ -272,23 +302,41 @@ export function spawnRow(state: GameState, z: number): void {
   const d = difficulty(state);
   const kinds: (ObstacleKind | null)[] = [null, null, null];
   const order = shuffle(rng, [0, 1, 2]);
+  let policeTarget: Lane | null = null;
 
   // The first couple of rows are gentle so a new player can get their bearings.
   const warmup = state.rowsSpawned < 2;
-  const pTwoDanfos = warmup ? 0 : 0.12 + 0.43 * d;
-  const pOneDanfo = warmup ? 0.5 : 0.45;
-  const roll = rng();
-  const danfos = roll < pTwoDanfos ? 2 : roll < pTwoDanfos + pOneDanfo ? 1 : 0;
-  for (let i = 0; i < danfos; i++) kinds[order[i]] = 'danfo';
+  const specials = state.rowsSpawned >= SPECIALS_AFTER_ROWS;
+  const pPolice = specials ? 0.1 + 0.14 * d : 0;
 
-  const pHazard = warmup ? 0.2 : 0.22 + 0.4 * d;
-  for (let i = danfos; i < 3; i++) {
-    if (rng() < pHazard) kinds[order[i]] = rng() < 0.55 ? 'pothole' : 'barrier';
+  if (rng() < pPolice) {
+    // Police row: the officer steps from one lane into a neighbouring one, so
+    // both lanes count as blocked. The third lane is always passable.
+    const start = order[0];
+    const target = start === 1 ? pick(rng, [0, 2]) : 1;
+    const free = 3 - start - target;
+    kinds[start] = 'police';
+    policeTarget = LANES[target];
+    if (rng() < 0.3 + 0.3 * d) kinds[free] = pickHazard(rng, d, specials);
+  } else {
+    const pTwoDanfos = warmup ? 0 : 0.2 + 0.45 * d;
+    const pOneDanfo = warmup ? 0.5 : 0.45;
+    const roll = rng();
+    const danfos = roll < pTwoDanfos ? 2 : roll < pTwoDanfos + pOneDanfo ? 1 : 0;
+    for (let i = 0; i < danfos; i++) kinds[order[i]] = 'danfo';
+
+    const pHazard = warmup ? 0.2 : 0.25 + 0.45 * d;
+    for (let i = danfos; i < 3; i++) {
+      if (rng() < pHazard) kinds[order[i]] = pickHazard(rng, d, specials);
+    }
+    // Never waste a row: an empty one gets at least one hazard.
+    if (!kinds.some(Boolean)) kinds[order[0]] = pickHazard(rng, d, specials);
   }
-  // Never waste a row: an empty one gets at least one hazard.
-  if (!kinds.some(Boolean)) {
-    kinds[order[0]] = rng() < 0.5 ? 'pothole' : 'barrier';
-  }
+
+  // An agbero's charge makes him arrive early. Start him further back so he
+  // reaches you on the row's beat and never squeezes into the gap in front.
+  const triggerDist = state.speed * AGBERO_TRIGGER_TIME;
+  const agberoOffset = triggerDist * (1 - 1 / (1 + AGBERO_CHARGE));
 
   kinds.forEach((kind, i) => {
     if (!kind) return;
@@ -296,7 +344,10 @@ export function spawnRow(state: GameState, z: number): void {
       id: state.nextId++,
       kind,
       lane: LANES[i],
-      z,
+      x: LANES[i],
+      targetLane: kind === 'police' ? policeTarget : null,
+      triggered: false,
+      z: kind === 'agbero' ? z + agberoOffset : z,
       depth: OBSTACLE_DEPTH[kind],
       variant: Math.floor(rng() * 1000),
       spent: false,
@@ -304,7 +355,9 @@ export function spawnRow(state: GameState, z: number): void {
     state.obstacles.push(o);
   });
 
-  const freeLanes = LANES.filter((_, i) => kinds[i] === null);
+  // Lanes nothing will occupy (the police officer's destination counts as taken).
+  const blocked = (i: number) => kinds[i] !== null || (policeTarget !== null && LANES[i] === policeTarget);
+  const freeLanes = LANES.filter((_, i) => !blocked(i));
 
   // Power-up: placed in an empty lane just after the row.
   if (state.nextPowerupIn <= 0 && freeLanes.length > 0) {
@@ -312,7 +365,10 @@ export function spawnRow(state: GameState, z: number): void {
     state.powerups.push({ id: state.nextId++, kind, lane: pick(rng, freeLanes), z: z + 1, taken: false });
     state.nextPowerupIn = randRange(rng(), POWERUP_INTERVAL_MIN, POWERUP_INTERVAL_MAX);
   } else if (rng() < 0.7) {
-    const coinLanes = LANES.filter((_, i) => kinds[i] !== 'danfo');
+    // Coins go in safe lanes or over hazards you can clear in place.
+    const coinLanes = LANES.filter(
+      (_, i) => !blocked(i) || kinds[i] === 'pothole' || kinds[i] === 'barrier',
+    );
     const lane = pick(rng, coinLanes);
     const kind = kinds[LANES.indexOf(lane)];
     if (kind === 'pothole') {
@@ -328,6 +384,14 @@ export function spawnRow(state: GameState, z: number): void {
   }
 
   state.rowsSpawned++;
+}
+
+/** A hazard you can clear without changing lane. Agbero appear as difficulty rises. */
+function pickHazard(rng: () => number, d: number, specials: boolean): ObstacleKind {
+  const pAgbero = specials ? 0.18 + 0.22 * d : 0;
+  const r = rng();
+  if (r < pAgbero) return 'agbero';
+  return rng() < 0.55 ? 'pothole' : 'barrier';
 }
 
 function addCoin(state: GameState, lane: Lane, y: number, z: number): void {
@@ -385,13 +449,16 @@ function collectPowerups(state: GameState): void {
 export function collides(p: Player, o: Obstacle): boolean {
   if (o.spent) return false;
   if (Math.abs(o.z) >= o.depth / 2 + PLAYER_HALF_DEPTH) return false;
-  if (Math.abs(o.lane - p.x) >= LANE_HIT_TOLERANCE) return false;
+  if (Math.abs(o.x - p.x) >= LANE_HIT_TOLERANCE) return false;
   switch (o.kind) {
     case 'pothole':
       return p.y < POTHOLE_CLEAR_HEIGHT;
     case 'barrier':
       return p.slideTime <= 0;
+    case 'agbero':
+      return p.y < AGBERO_CLEAR_HEIGHT;
     case 'danfo':
+    case 'police':
       return true;
   }
 }

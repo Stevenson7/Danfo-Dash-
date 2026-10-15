@@ -8,13 +8,13 @@ export const MAX_LANE = 1;
 export const SPAWN_Z = 80;
 export const DESPAWN_Z = -8;
 
-export const BASE_SPEED = 15; // units / second at the start of a run
-export const MAX_SPEED = 38;
-export const SPEED_RAMP = 0.2; // units / second gained every second
+export const BASE_SPEED = 17; // units / second at the start of a run
+export const MAX_SPEED = 42;
+export const SPEED_RAMP = 0.28; // units / second gained every second
 
 /** Time between obstacle rows, interpolated by difficulty (seconds). */
-export const ROW_GAP_EASY = 1.25;
-export const ROW_GAP_HARD = 0.72;
+export const ROW_GAP_EASY = 1.1;
+export const ROW_GAP_HARD = 0.66;
 
 export const LANE_CHANGE_RATE = 9; // lanes / second (≈0.11 s per lane)
 
@@ -33,7 +33,23 @@ export const OBSTACLE_DEPTH = {
   danfo: 4.2,
   pothole: 1.3,
   barrier: 0.5,
+  police: 0.7,
+  agbero: 0.9,
 } as const;
+
+/** Agbero crouch low to grab you: you must be this high to clear one. */
+export const AGBERO_CLEAR_HEIGHT = 0.55;
+/** Agbero start charging when they are this many seconds away… */
+export const AGBERO_TRIGGER_TIME = 0.95;
+/** …and then close in this much faster than the road (fraction of speed). */
+export const AGBERO_CHARGE = 0.55;
+
+/** Police step into the neighbouring lane when this many seconds away. */
+export const POLICE_TRIGGER_TIME = 1.15;
+export const POLICE_STEP_RATE = 2.8; // lanes / second (~0.36 s step)
+
+/** Rows spawned before police / agbero can appear. */
+export const SPECIALS_AFTER_ROWS = 4;
 
 export const COIN_SCORE = 10;
 export const COIN_SPACING = 2.2;

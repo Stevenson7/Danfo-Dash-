@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGBERO_CHARGE,
   BASE_SPEED,
   COIN_SCORE,
   MAX_SPEED,
@@ -29,7 +30,18 @@ function run(g: GameState, seconds: number, actions: Action[] = []): void {
 }
 
 function obstacle(kind: ObstacleKind, lane: Lane, z: number): Obstacle {
-  return { id: 999, kind, lane, z, depth: OBSTACLE_DEPTH[kind], variant: 0, spent: false };
+  return {
+    id: 999,
+    kind,
+    lane,
+    x: lane,
+    targetLane: null,
+    triggered: false,
+    z,
+    depth: OBSTACLE_DEPTH[kind],
+    variant: 0,
+    spent: false,
+  };
 }
 
 describe('game lifecycle', () => {
@@ -202,6 +214,89 @@ describe('collisions', () => {
   });
 });
 
+describe('police & agbero', () => {
+  it('police step into their target lane as you approach', () => {
+    const g = emptyGame();
+    const cop = { ...obstacle('police', 0, 40), targetLane: 1 as Lane };
+    g.obstacles.push(cop);
+    run(g, 0.3);
+    expect(cop.x).toBe(0); // still far away: standing still
+    run(g, 1.3);
+    expect(cop.triggered).toBe(true);
+    expect(cop.x).toBe(1);
+    expect(g.events.some((e) => e.type === 'whistle')).toBe(true);
+  });
+
+  it('police catch you in the lane they step into', () => {
+    const g = emptyGame();
+    applyAction(g, 'right'); // dodge to lane 1 early… right where the officer goes
+    g.obstacles.push({ ...obstacle('police', 0, 30), targetLane: 1 });
+    run(g, 3);
+    expect(g.phase).toBe('over');
+    expect(g.crashedBy).toBe('police');
+  });
+
+  it('police cannot be jumped or slid under', () => {
+    const p = createPlayer();
+    const cop = obstacle('police', 0, 0);
+    p.y = 1.8;
+    expect(collides(p, cop)).toBe(true);
+    p.y = 0;
+    p.slideTime = 0.3;
+    expect(collides(p, cop)).toBe(true);
+  });
+
+  it('agbero charge at you when close', () => {
+    const g = emptyGame();
+    const tout = obstacle('agbero', 1, 30);
+    g.obstacles.push(tout);
+    const roadTravel = () => g.speed / 60;
+    let extra = 0;
+    for (let i = 0; i < 90; i++) {
+      const before = tout.z;
+      const travel = roadTravel();
+      run(g, 1 / 60);
+      extra += before - tout.z - travel;
+    }
+    expect(tout.triggered).toBe(true);
+    expect(extra).toBeGreaterThan(1);
+    expect(g.events.some((e) => e.type === 'agbero')).toBe(true);
+  });
+
+  it('agbero must be jumped', () => {
+    const p = createPlayer();
+    const tout = obstacle('agbero', 0, 0);
+    expect(collides(p, tout)).toBe(true);
+    p.slideTime = 0.3;
+    expect(collides(p, tout)).toBe(true);
+    p.slideTime = 0;
+    p.y = 1;
+    expect(collides(p, tout)).toBe(false);
+  });
+
+  it('police and agbero appear once the run gets going', () => {
+    const g = emptyGame(3);
+    g.speed = MAX_SPEED;
+    g.rowsSpawned = 10;
+    const seen = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      g.obstacles = [];
+      spawnRow(g, 50);
+      g.obstacles.forEach((o) => seen.add(o.kind));
+    }
+    expect(seen.has('police')).toBe(true);
+    expect(seen.has('agbero')).toBe(true);
+  });
+
+  it('the first rows have no police or agbero', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const g = startGame(createGame(seed), seed);
+      const early = g.obstacles.filter((o) => o.kind === 'police' || o.kind === 'agbero');
+      expect(early).toEqual([]);
+    }
+  });
+});
+
 describe('pickups & scoring', () => {
   it('collects coins in the player lane', () => {
     const g = emptyGame();
@@ -257,15 +352,21 @@ describe('difficulty & generation', () => {
     expect(difficulty(g)).toBe(1);
   });
 
-  it('every row leaves at least one lane free of danfos', () => {
+  it('every row leaves at least one lane free of danfos and police', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const g = emptyGame(seed);
       g.speed = MAX_SPEED; // hardest setting
+      g.rowsSpawned = 10; // past warm-up, so police & agbero can appear
       for (let row = 0; row < 200; row++) {
         g.obstacles = [];
         spawnRow(g, 50);
-        const danfos = g.obstacles.filter((o) => o.kind === 'danfo').length;
-        expect(danfos).toBeLessThanOrEqual(2);
+        // Lanes you cannot pass through: danfos, plus police start AND target lanes.
+        const hardLanes = new Set<number>();
+        for (const o of g.obstacles) {
+          if (o.kind === 'danfo' || o.kind === 'police') hardLanes.add(o.lane);
+          if (o.targetLane !== null) hardLanes.add(o.targetLane);
+        }
+        expect(hardLanes.size).toBeLessThanOrEqual(2);
         expect(g.obstacles.length).toBeGreaterThan(0);
         const lanes = new Set(g.obstacles.map((o) => o.lane));
         expect(lanes.size).toBe(g.obstacles.length); // one obstacle per lane
@@ -291,20 +392,24 @@ describe('difficulty & generation', () => {
   });
 });
 
-/** Greedy bot: head for the safest lane, jump potholes, slide barriers. */
+/** Greedy bot: head for the safest lane, jump potholes/agbero, slide barriers. */
 function autopilot(g: GameState): void {
   const p = g.player;
+  // Police block both the lane they stand in and the lane they will step into.
+  const lanesOf = (o: Obstacle) =>
+    o.kind === 'police' && o.targetLane !== null ? [Math.round(o.x), o.targetLane] : [Math.round(o.x)];
+  const hard = (o: Obstacle) => o.kind === 'danfo' || o.kind === 'police';
   const ahead = (lane: number, maxZ: number) =>
-    g.obstacles.filter((o) => o.lane === lane && o.z + o.depth / 2 > -0.5 && o.z - o.depth / 2 < maxZ);
+    g.obstacles.filter((o) => lanesOf(o).includes(lane) && o.z + o.depth / 2 > -0.5 && o.z - o.depth / 2 < maxZ);
   const look = g.speed * 0.9;
   const cost = (lane: number) => {
     let c = Math.abs(lane - p.lane) * 0.1;
     // Never step sideways into something we are already level with.
-    if (lane !== p.lane && ahead(lane, 1.2).length) c += 500;
-    for (const o of ahead(lane, look)) c += o.kind === 'danfo' ? 100 / Math.max(1, o.z) : 1;
+    if (lane !== p.lane && ahead(lane, g.speed * 0.2 + 1).some((o) => o.z > -0.5)) c += 500;
+    for (const o of ahead(lane, look)) c += hard(o) ? 100 / Math.max(1, o.z) : 1;
     // Must be able to pass through intermediate lanes.
     if (Math.abs(lane - p.lane) === 2) {
-      for (const o of ahead(0, 4)) if (o.kind === 'danfo') c += 1000;
+      for (const o of ahead(0, g.speed * 0.25 + 2)) if (hard(o)) c += 1000;
     }
     return c;
   };
@@ -312,9 +417,12 @@ function autopilot(g: GameState): void {
   if (best < p.lane) applyAction(g, 'left');
   else if (best > p.lane) applyAction(g, 'right');
 
-  const near = ahead(Math.round(p.x), g.speed * 0.25 + 1).filter((o) => o.kind !== 'danfo');
-  for (const o of near) {
-    if (o.kind === 'pothole' && p.y === 0 && p.vy === 0) applyAction(g, 'jump');
-    if (o.kind === 'barrier' && p.slideTime <= 0.05) applyAction(g, 'slide');
+  for (const o of ahead(Math.round(p.x), g.speed * 0.6)) {
+    const closing = g.speed * (o.kind === 'agbero' && o.triggered ? 1 + AGBERO_CHARGE : 1);
+    const eta = (o.z - o.depth / 2 - 0.45) / closing;
+    if ((o.kind === 'pothole' || o.kind === 'agbero') && eta < 0.12 && p.y === 0 && p.vy === 0) {
+      applyAction(g, 'jump');
+    }
+    if (o.kind === 'barrier' && eta < 0.15 && p.slideTime <= 0.05) applyAction(g, 'slide');
   }
 }

@@ -469,6 +469,8 @@ export class Renderer {
         case 'obstacle':
           if (it.o.kind === 'danfo') this.drawDanfo(ctx, it.o);
           else if (it.o.kind === 'pothole') this.drawPothole(ctx, it.o);
+          else if (it.o.kind === 'police') this.drawPolice(ctx, it.o);
+          else if (it.o.kind === 'agbero') this.drawAgbero(ctx, it.o);
           else this.drawBarrier(ctx, it.o);
           break;
         case 'coin':
@@ -713,6 +715,216 @@ export class Renderer {
       ctx.arc(l.x, by - u * 0.17, Math.max(1.5, u * 0.04), 0, Math.PI * 2);
       ctx.arc(r.x, by - u * 0.17, Math.max(1.5, u * 0.04), 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** Front-facing traffic officer with a STOP paddle; steps into `targetLane`. */
+  private drawPolice(ctx: CanvasRenderingContext2D, o: Obstacle): void {
+    const base = this.project(o.x, 0, o.z);
+    const u = base.s;
+    if (u < 2) return;
+    const moving = o.targetLane !== null && o.x !== o.targetLane;
+    const dir = o.targetLane === null ? 0 : Math.sign(o.targetLane - o.lane);
+    ctx.save();
+    this.fog(ctx, o.z);
+    if (o.spent) ctx.globalAlpha *= 0.35;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(base.x, base.y, u * 0.24, u * 0.06, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.translate(base.x, base.y);
+    ctx.scale(u, u);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const stride = o.triggered && moving ? Math.sin(this.clock * 22) * 0.06 : 0;
+
+    // Legs & boots.
+    ctx.strokeStyle = '#15171c';
+    ctx.lineWidth = 0.12;
+    ctx.beginPath();
+    ctx.moveTo(-0.08, -0.58);
+    ctx.lineTo(-0.1 - stride, -0.04);
+    ctx.moveTo(0.08, -0.58);
+    ctx.lineTo(0.1 + stride, -0.04);
+    ctx.stroke();
+    ctx.fillStyle = '#050505';
+    ctx.fillRect(-0.17 - stride, -0.06, 0.13, 0.06);
+    ctx.fillRect(0.04 + stride, -0.06, 0.13, 0.06);
+
+    // Black uniform with a hi-vis vest so officers read at a glance.
+    ctx.fillStyle = '#1b1f27';
+    roundRect(ctx, -0.2, -1.04, 0.4, 0.5, 0.08);
+    ctx.fill();
+    ctx.fillStyle = '#c8ff3d';
+    ctx.fillRect(-0.2, -0.82, 0.4, 0.06);
+    ctx.fillRect(-0.2, -0.68, 0.4, 0.06);
+    ctx.fillRect(-0.13, -1.03, 0.06, 0.47);
+    ctx.fillRect(0.07, -1.03, 0.06, 0.47);
+    ctx.fillStyle = '#f4f1e8';
+    ctx.fillRect(-0.2, -0.6, 0.4, 0.05); // belt
+
+    // Arms: one holds the STOP paddle up, the other points where they'll step.
+    const paddleSide = dir === 0 ? 1 : -dir;
+    ctx.strokeStyle = '#1b1f27';
+    ctx.lineWidth = 0.08;
+    ctx.beginPath();
+    ctx.moveTo(paddleSide * 0.18, -0.98);
+    ctx.lineTo(paddleSide * 0.3, -1.22);
+    ctx.moveTo(-paddleSide * 0.18, -0.98);
+    ctx.lineTo(-paddleSide * 0.42, -0.9);
+    ctx.stroke();
+    ctx.fillStyle = '#f4f4f4'; // white gloves
+    ctx.beginPath();
+    ctx.arc(-paddleSide * 0.44, -0.9, 0.05, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#777';
+    ctx.lineWidth = 0.03;
+    ctx.beginPath();
+    ctx.moveTo(paddleSide * 0.3, -1.22);
+    ctx.lineTo(paddleSide * 0.3, -1.32);
+    ctx.stroke();
+    ctx.fillStyle = '#e23b3b';
+    ctx.beginPath();
+    ctx.arc(paddleSide * 0.3, -1.42, 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 0.02;
+    ctx.stroke();
+    if (u > 40) {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 0.07px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('STOP', paddleSide * 0.3, -1.415);
+    }
+
+    // Head with peaked cap.
+    ctx.fillStyle = PALETTE.skin;
+    ctx.beginPath();
+    ctx.arc(0, -1.15, 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0d0f14';
+    ctx.fillRect(-0.15, -1.3, 0.3, 0.08);
+    ctx.fillRect(-0.12, -1.24, 0.24, 0.04);
+    ctx.fillStyle = '#e23b3b';
+    ctx.fillRect(-0.15, -1.25, 0.3, 0.025);
+    ctx.fillStyle = '#ffcc1a';
+    ctx.beginPath();
+    ctx.arc(0, -1.27, 0.025, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Telegraph: chevrons showing which lane the officer will step into.
+    if (dir !== 0 && moving) {
+      const pulse = 0.6 + 0.4 * Math.abs(Math.sin(this.clock * (o.triggered ? 14 : 5)));
+      ctx.globalAlpha *= pulse;
+      ctx.fillStyle = o.triggered ? '#ff4d4d' : '#ffcc1a';
+      for (let i = 0; i < 2; i++) {
+        const cx = dir * (0.05 + i * 0.16);
+        ctx.beginPath();
+        ctx.moveTo(cx - dir * 0.05, -1.78);
+        ctx.lineTo(cx + dir * 0.07, -1.68);
+        ctx.lineTo(cx - dir * 0.05, -1.58);
+        ctx.lineTo(cx - dir * 0.0, -1.68);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  /** Crouching tout reaching for your money. Charges when close: jump him. */
+  private drawAgbero(ctx: CanvasRenderingContext2D, o: Obstacle): void {
+    const base = this.project(o.x, 0, o.z);
+    const u = base.s;
+    if (u < 2) return;
+    ctx.save();
+    this.fog(ctx, o.z);
+    if (o.spent) ctx.globalAlpha *= 0.35;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(base.x, base.y, u * 0.3, u * 0.07, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.translate(base.x, base.y);
+    ctx.scale(u, u);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const bob = o.triggered ? Math.abs(Math.sin(this.clock * 18)) * 0.05 : Math.sin(this.clock * 3 + o.variant) * 0.015;
+    ctx.translate(0, -bob);
+
+    // Wide crouched legs (jeans) and slippers.
+    ctx.strokeStyle = '#2f5d8a';
+    ctx.lineWidth = 0.12;
+    ctx.beginPath();
+    ctx.moveTo(-0.08, -0.36);
+    ctx.lineTo(-0.24, -0.2);
+    ctx.lineTo(-0.22, -0.03);
+    ctx.moveTo(0.08, -0.36);
+    ctx.lineTo(0.24, -0.2);
+    ctx.lineTo(0.22, -0.03);
+    ctx.stroke();
+    ctx.fillStyle = '#e23b3b';
+    ctx.fillRect(-0.3, -0.04, 0.14, 0.04);
+    ctx.fillRect(0.16, -0.04, 0.14, 0.04);
+
+    // Singlet torso, leaning in.
+    ctx.fillStyle = '#f4f1e8';
+    roundRect(ctx, -0.17, -0.7, 0.34, 0.38, 0.07);
+    ctx.fill();
+    ctx.fillStyle = '#e23b3b';
+    ctx.fillRect(-0.17, -0.52, 0.34, 0.05);
+
+    // Arms spread wide; one hand waves a wad of naira.
+    ctx.strokeStyle = PALETTE.skin;
+    ctx.lineWidth = 0.08;
+    const wave = Math.sin(this.clock * (o.triggered ? 16 : 4)) * 0.05;
+    ctx.beginPath();
+    ctx.moveTo(-0.15, -0.64);
+    ctx.lineTo(-0.36, -0.58 + wave);
+    ctx.lineTo(-0.46, -0.7 + wave);
+    ctx.moveTo(0.15, -0.64);
+    ctx.lineTo(0.36, -0.58 - wave);
+    ctx.lineTo(0.46, -0.7 - wave);
+    ctx.stroke();
+    ctx.fillStyle = '#2e8b57';
+    ctx.fillRect(0.4, -0.82 - wave, 0.14, 0.08);
+    ctx.fillStyle = '#7fd38f';
+    ctx.fillRect(0.42, -0.8 - wave, 0.1, 0.02);
+
+    // Head with backwards cap.
+    ctx.fillStyle = PALETTE.skin;
+    ctx.beginPath();
+    ctx.arc(0, -0.82, 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffcc1a';
+    ctx.beginPath();
+    ctx.arc(0, -0.85, 0.125, Math.PI, 0);
+    ctx.fill();
+    ctx.fillRect(-0.04, -0.88, 0.08, 0.03);
+    ctx.fillStyle = '#1a0f0a';
+    ctx.beginPath();
+    ctx.ellipse(0, -0.76, 0.04, o.triggered ? 0.03 : 0.012, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Speech bubble once he charges.
+    if (o.triggered && u > 36) {
+      ctx.fillStyle = '#fff';
+      roundRect(ctx, -0.32, -1.32, 0.64, 0.2, 0.06);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-0.04, -1.13);
+      ctx.lineTo(0.06, -1.13);
+      ctx.lineTo(0, -1.03);
+      ctx.fill();
+      ctx.fillStyle = '#151515';
+      ctx.font = '900 0.11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('OWO DA?!', 0, -1.215);
     }
     ctx.restore();
   }

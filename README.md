@@ -26,6 +26,12 @@ while sliding to jump straight out of it.
 - 🚌 **Danfo**: too tall to jump. Change lane.
 - 🕳️ **Pothole**: jump over it (or change lane).
 - 🚧 **Barrier** (the yellow *DUCK* sign): slide under it (or change lane).
+- 👮 **Police**: too tall to jump. As you get close the officer **steps into
+  the next lane**. The chevrons above their head show which way (yellow from
+  afar, flashing red with a whistle when they move), so don't dodge into it!
+- 🧍 **Agbero**: crouches low to grab your money. Jump over him, but he
+  **charges at you** when you get close ("Owo da?!"), so jump a bit earlier
+  than you would for a pothole.
 
 **Pickups**
 
@@ -36,8 +42,10 @@ while sliding to jump straight out of it.
 - **x2 Double Naira** (green): doubles all points for 10 s.
 
 **Scoring & difficulty**: points accrue with distance plus coins. Speed rises
-continuously and obstacle rows get denser. Every row leaves at least one lane
-free of danfos, so the road is always beatable. Jumps keep their height but get
+continuously and obstacle rows get denser. Police and agbero join after the
+first few rows and get more common as you speed up. Every row leaves at least
+one lane free of danfos and police (counting the lane an officer will step
+into), so the road is always beatable. Jumps keep their height but get
 quicker at high speed. Your personal best is saved on your device
 (`localStorage`). After a run, **Share score** opens your phone's share sheet
 (WhatsApp, X, etc.) with your score and a link to the game, or copies the
@@ -95,7 +103,7 @@ src/
 ## Tests
 
 `npm test` runs Vitest unit tests covering lane changes, jump/slide physics,
-fast-fall, collisions for each obstacle type, shields, coins, magnet,
+fast-fall, collisions for each obstacle type, police stepping and agbero charging, shields, coins, magnet,
 double naira, scoring, score sharing, the difficulty ramp, road-generation fairness (every row
 has a non-danfo lane), determinism, swipe/keyboard mapping and personal-best
 storage. A small autopilot bot also plays a full minute on 10 different road

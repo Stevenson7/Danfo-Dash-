@@ -185,6 +185,12 @@ export class Game {
             this.sfx.shieldBreak();
             vibrate(40);
             break;
+          case 'whistle':
+            this.sfx.whistle();
+            break;
+          case 'agbero':
+            this.sfx.agbero();
+            break;
           case 'milestone':
             this.sfx.milestone();
             break;
